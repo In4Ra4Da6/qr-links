@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+<title>QR Links</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<style>
+:root {
+  --bg: #080f1a;
+  --surface: #0d1626;
+  --card: #111d30;
+  --border: rgba(99,179,237,0.10);
+  --accent: #38bdf8;
+  --accent2: #818cf8;
+  --text: #e8f1fc;
+  --muted: #7090b0;
+  --danger: #f87171;
+  --success: #34d399;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { min-height: 100vh; background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; }
+
+body {
+  background: radial-gradient(ellipse at 20% 10%, #0a1f3a 0%, #080f1a 60%);
+}
+
+/* PAGES */
+#page-home, #page-public { display: none; padding: 16px; max-width: 600px; margin: 0 auto; padding-bottom: 40px; }
+#page-home.active, #page-public.active { display: block; }
+
+/* HEADER */
+.app-header {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 24px; padding-top: 8px;
+}
+.app-logo {
+  width: 40px; height: 40px; border-radius: 12px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0;
+}
+.app-title { font-family: 'Sora', sans-serif; font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+.app-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+/* CARDS */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.card-title {
+  font-family: 'Sora', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--accent);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* INPUTS */
+label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 500; }
+input[type="text"] {
+  width: 100%; padding: 11px 14px; border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  color: var(--text); font-size: 15px; font-family: 'DM Sans', sans-serif;
+  outline: none; transition: border-color 0.2s;
+  margin-bottom: 12px;
+}
+input[type="text"]:focus { border-color: rgba(56,189,248,0.4); }
+input[type="text"]::placeholder { color: #3a5070; }
+
+/* BUTTONS */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 11px 18px; border-radius: 10px; border: none; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600;
+  transition: all 0.18s; white-space: nowrap;
+}
+.btn-primary { background: var(--accent); color: #06202b; }
+.btn-primary:hover { background: #7dd3f8; }
+.btn-ghost { background: transparent; color: var(--accent); border: 1px solid rgba(56,189,248,0.25); }
+.btn-ghost:hover { background: rgba(56,189,248,0.08); }
+.btn-danger { background: transparent; color: var(--danger); border: 1px solid rgba(248,113,113,0.25); }
+.btn-danger:hover { background: rgba(248,113,113,0.08); }
+.btn-sm { padding: 7px 12px; font-size: 12px; border-radius: 8px; }
+.btn-full { width: 100%; }
+
+/* CATEGORY EDITOR */
+.cat-block {
+  background: rgba(255,255,255,0.025);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.cat-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+}
+.cat-label { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 13px; color: var(--accent2); }
+.link-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+.link-row input { margin-bottom: 0; flex: 1; font-size: 13px; padding: 8px 10px; }
+.link-row .btn-danger { padding: 8px 10px; border-radius: 8px; font-size: 16px; }
+
+.add-link-btn { font-size: 12px; padding: 6px 12px; border-radius: 8px; margin-top: 4px; }
+
+/* DASHBOARD LIST */
+.qr-item {
+  background: rgba(255,255,255,0.025);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+  transition: border-color 0.2s;
+}
+.qr-item:hover { border-color: rgba(56,189,248,0.2); }
+.qr-item-title { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+.qr-item-meta { font-size: 12px; color: var(--muted); margin-bottom: 10px; display: flex; gap: 12px; flex-wrap: wrap; }
+.scan-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(52,211,153,0.12); color: var(--success);
+  border-radius: 20px; padding: 2px 9px; font-size: 12px; font-weight: 600;
+}
+.qr-item-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* QR PREVIEW MODAL */
+#qrModal {
+  display: none; position: fixed; inset: 0; z-index: 100;
+  background: rgba(5,10,20,0.92); backdrop-filter: blur(6px);
+  align-items: center; justify-content: center; padding: 20px;
+}
+#qrModal.show { display: flex; }
+.modal-box {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 20px; padding: 24px; max-width: 340px; width: 100%;
+  text-align: center; position: relative;
+}
+.modal-title { font-family: 'Sora', sans-serif; font-weight: 800; font-size: 18px; margin-bottom: 6px; }
+.modal-url { font-size: 11px; color: var(--muted); word-break: break-all; margin-bottom: 16px; }
+#modalQRBox { display: flex; justify-content: center; margin-bottom: 16px; }
+#modalQRBox > div, #modalQRBox img, #modalQRBox canvas {
+  border-radius: 8px; background: white; padding: 8px;
+}
+.modal-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.modal-close {
+  position: absolute; top: 12px; right: 14px;
+  background: none; border: none; color: var(--muted); font-size: 22px; cursor: pointer; line-height: 1;
+}
+
+/* PUBLIC PAGE */
+.pub-header {
+  text-align: center; margin-bottom: 20px; padding: 20px 0 10px;
+}
+.pub-title { font-family: 'Sora', sans-serif; font-weight: 800; font-size: 24px; margin-bottom: 6px; }
+.pub-scans { font-size: 13px; color: var(--muted); }
+.pub-qr { display: flex; justify-content: center; margin-bottom: 20px; }
+.pub-qr > div { background: white; padding: 10px; border-radius: 12px; }
+.cat-section { margin-bottom: 16px; }
+.cat-section-title {
+  font-family: 'Sora', sans-serif; font-size: 13px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.8px; color: var(--accent2);
+  margin-bottom: 10px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.link-card {
+  display: flex; align-items: center; gap: 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 12px; padding: 12px 14px;
+  margin-bottom: 8px; text-decoration: none; color: var(--text);
+  transition: all 0.18s;
+}
+.link-card:hover, .link-card:active {
+  background: rgba(56,189,248,0.07);
+  border-color: rgba(56,189,248,0.25);
+  transform: translateY(-1px);
+}
+.link-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, rgba(56,189,248,0.15), rgba(129,140,248,0.15));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.link-text-main { font-weight: 600; font-size: 15px; }
+.link-url-small { font-size: 11px; color: var(--muted); margin-top: 2px; word-break: break-all; }
+.link-arrow { margin-left: auto; color: var(--muted); font-size: 18px; }
+
+/* BACK BTN */
+.back-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: none; color: var(--muted);
+  font-family: 'DM Sans', sans-serif; font-size: 14px; cursor: pointer; margin-bottom: 16px;
+  padding: 0;
+}
+.back-btn:hover { color: var(--text); }
+
+/* LOADING */
+.loading { text-align: center; color: var(--muted); padding: 20px; font-size: 14px; }
+.spinner {
+  display: inline-block; width: 20px; height: 20px;
+  border: 2px solid rgba(56,189,248,0.2); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.7s linear infinite; margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.empty-state { text-align: center; padding: 32px 16px; color: var(--muted); }
+.empty-icon { font-size: 40px; margin-bottom: 10px; }
+.empty-text { font-size: 14px; }
+
+/* TOAST */
+#toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(60px);
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 12px 20px; font-size: 14px;
+  transition: transform 0.3s; z-index: 200; white-space: nowrap;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+#toast.show { transform: translateX(-50%) translateY(0); }
+
+/* SECTION TOGGLE */
+.section-tabs { display: flex; gap: 0; margin-bottom: 20px; background: rgba(255,255,255,0.03); border-radius: 12px; padding: 4px; }
+.tab-btn {
+  flex: 1; padding: 9px; border: none; background: none; color: var(--muted);
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  border-radius: 9px; cursor: pointer; transition: all 0.2s;
+}
+.tab-btn.active { background: var(--card); color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- HOME PAGE -->
+<div id="page-home" class="active">
+  <div class="app-header">
+    <div class="app-logo">🔗</div>
+    <div>
+      <div class="app-title">QR Links</div>
+      <div class="app-sub">Crea QR code con liste di link</div>
+    </div>
+  </div>
+
+  <div class="section-tabs">
+    <button class="tab-btn active" onclick="switchTab('create')">✨ Crea QR</button>
+    <button class="tab-btn" onclick="switchTab('dashboard')">📊 I tuoi QR</button>
+  </div>
+
+  <!-- TAB CREA -->
+  <div id="tab-create">
+    <div class="card">
+      <div class="card-title">✨ Nuovo QR</div>
+
+      <label>Titolo principale (visibile a chi scansiona)</label>
+      <input type="text" id="pageTitle" placeholder="Es: Menù Ristorante Mario"/>
+
+      <div id="categoriesArea"></div>
+
+      <button class="btn btn-ghost btn-full" onclick="addCategory()" style="margin-bottom:14px">
+        + Aggiungi categoria
+      </button>
+
+      <button class="btn btn-primary btn-full" onclick="createQR()">
+        🚀 Crea QR Code
+      </button>
+    </div>
+  </div>
+
+  <!-- TAB DASHBOARD -->
+  <div id="tab-dashboard" style="display:none">
+    <div class="card">
+      <div class="card-title">📊 I tuoi QR</div>
+      <div id="dashList"><div class="loading"><span class="spinner"></span>Caricamento...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- PUBLIC PAGE -->
+<div id="page-public">
+  <div id="publicContent"></div>
+</div>
+
+<!-- QR MODAL -->
+<div id="qrModal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal()">×</button>
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-url" id="modalUrl"></div>
+    <div id="modalQRBox"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="copyLink()">🔗 Copia link</button>
+      <button class="btn btn-primary btn-sm" onclick="downloadQR()">⬇ Scarica PNG</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ===== FIREBASE CONFIG =====
+const firebaseConfig = {
+  apiKey: "AIzaSyAdro0lRN-n5D4dhBeTz8g8PWF48YAZLrw",
+  authDomain: "qrcode-generator-f5335.firebaseapp.com",
+  projectId: "qrcode-generator-f5335",
+  storageBucket: "qrcode-generator-f5335.firebasestorage.app",
+  messagingSenderId: "465412841272",
+  appId: "1:465412841272:web:c282cc195b415b3f16ebcd"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// ===== STATE =====
+let currentModalUrl = '';
+let catCount = 0;
+
+// ===== UTILS =====
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function toast(msg, duration=2500){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=> t.classList.remove('show'), duration);
+}
+function makeId(n=10){ return Math.random().toString(36).slice(2,2+n); }
+function getBaseUrl(){ return 'https://in4ra4da6.github.io/qr-links/'; }
+function getPublicUrl(id){ return getBaseUrl() + '#/p/' + id; }
+
+// ===== TAB SWITCH =====
+function switchTab(tab){
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>{
+    b.classList.toggle('active', (i===0 && tab==='create')||(i===1 && tab==='dashboard'));
+  });
+  document.getElementById('tab-create').style.display = tab==='create' ? 'block' : 'none';
+  document.getElementById('tab-dashboard').style.display = tab==='dashboard' ? 'block' : 'none';
+  if(tab==='dashboard') loadDashboard();
+}
+
+// ===== CATEGORY EDITOR =====
+function addCategory(name='', links=null){
+  catCount++;
+  const id = 'cat_'+catCount;
+  const area = document.getElementById('categoriesArea');
+  const div = document.createElement('div');
+  div.className = 'cat-block';
+  div.id = id;
+  div.innerHTML = `
+    <div class="cat-header">
+      <span class="cat-label">📂 Categoria ${catCount}</span>
+      <button class="btn btn-danger btn-sm" onclick="document.getElementById('${id}').remove()">✕ Rimuovi</button>
+    </div>
+    <label>Nome categoria</label>
+    <input type="text" class="cat-name" placeholder="Es: Social, Menu, Contatti..." value="${esc(name)}"/>
+    <div class="links-area"></div>
+    <button class="btn btn-ghost add-link-btn" onclick="addLink('${id}')">+ Aggiungi link</button>
+  `;
+  area.appendChild(div);
+  const linksToAdd = links && links.length ? links : [{text:'', url:''}];
+  linksToAdd.forEach(l => addLink(id, l.text, l.url));
+}
+
+function addLink(catId, text='', url=''){
+  const area = document.querySelector('#'+catId+' .links-area');
+  const div = document.createElement('div');
+  div.className = 'link-row';
+  const rndId = 'lr_'+makeId(6);
+  div.id = rndId;
+  div.innerHTML = `
+    <input type="text" class="link-text" placeholder="Nome link" value="${esc(text)}"/>
+    <input type="text" class="link-url" placeholder="https://..." value="${esc(url)}"/>
+    <button class="btn btn-danger" onclick="document.getElementById('${rndId}').remove()">✕</button>
+  `;
+  area.appendChild(div);
+}
+
+// initialize with one category
+addCategory('', [{text:'', url:''}]);
+
+// ===== CREATE QR =====
+async function createQR(){
+  const title = document.getElementById('pageTitle').value.trim();
+  if(!title){ toast('⚠️ Inserisci un titolo!'); return; }
+
+  const cats = [];
+  document.querySelectorAll('.cat-block').forEach(block=>{
+    const name = block.querySelector('.cat-name').value.trim();
+    const links = [];
+    block.querySelectorAll('.link-row').forEach(row=>{
+      const t = row.querySelector('.link-text').value.trim();
+      const u = row.querySelector('.link-url').value.trim();
+      if(t && u) links.push({text:t, url:u});
+    });
+    if(name || links.length) cats.push({name, links});
+  });
+
+  if(cats.length===0 || cats.every(c=>c.links.length===0)){
+    toast('⚠️ Aggiungi almeno un link!'); return;
+  }
+
+  const btn = document.querySelector('#tab-create .btn-primary');
+  btn.textContent = '⏳ Creazione...'; btn.disabled = true;
+
+  try {
+    const id = makeId(10);
+    await db.collection('pages').doc(id).set({
+      title,
+      categories: cats,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      scans: 0
+    });
+    btn.textContent = '🚀 Crea QR Code'; btn.disabled = false;
+    // reset form
+    document.getElementById('pageTitle').value = '';
+    document.getElementById('categoriesArea').innerHTML = '';
+    catCount = 0;
+    addCategory('', [{text:'', url:''}]);
+    toast('✅ QR creato!');
+    openModal(id, title);
+  } catch(e) {
+    console.error(e);
+    btn.textContent = '🚀 Crea QR Code'; btn.disabled = false;
+    toast('❌ Errore: ' + e.message);
+  }
+}
+
+// ===== MODAL =====
+function openModal(id, title){
+  const url = getPublicUrl(id);
+  currentModalUrl = url;
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalUrl').textContent = url;
+  const box = document.getElementById('modalQRBox');
+  box.innerHTML = '';
+  const qrDiv = document.createElement('div');
+  qrDiv.style.display = 'inline-block';
+  box.appendChild(qrDiv);
+  setTimeout(function(){
+    new QRCode(qrDiv, { text: url, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.H });
+  }, 50);
+  document.getElementById('qrModal').classList.add('show');
+}
+function closeModal(){ document.getElementById('qrModal').classList.remove('show'); }
+
+function copyLink(){
+  if(navigator.clipboard) navigator.clipboard.writeText(currentModalUrl);
+  toast('🔗 Link copiato!');
+}
+
+function downloadQR(){
+  const box = document.getElementById('modalQRBox');
+  const img = box.querySelector('img');
+  const canvas = box.querySelector('canvas');
+  let src = img ? img.src : (canvas ? canvas.toDataURL('image/png') : null);
+  if(!src){ toast('❌ Impossibile scaricare'); return; }
+  const a = document.createElement('a'); a.href = src; a.download = 'qr.png';
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('⬇ Download avviato!');
+}
+
+// ===== DASHBOARD =====
+async function loadDashboard(){
+  const list = document.getElementById('dashList');
+  list.innerHTML = '<div class="loading"><span class="spinner"></span>Caricamento...</div>';
+  try {
+    const snap = await db.collection('pages').orderBy('createdAt','desc').limit(50).get();
+    if(snap.empty){
+      list.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">Nessun QR ancora creato.</div></div>';
+      return;
+    }
+    list.innerHTML = '';
+    snap.forEach(doc=>{
+      const d = doc.data();
+      const id = doc.id;
+      const totalLinks = (d.categories||[]).reduce((a,c)=>a+(c.links||[]).length,0);
+      const el = document.createElement('div');
+      el.className = 'qr-item';
+      el.innerHTML = `
+        <div class="qr-item-title">${esc(d.title||'—')}</div>
+        <div class="qr-item-meta">
+          <span>📂 ${(d.categories||[]).length} categorie</span>
+          <span>🔗 ${totalLinks} link</span>
+          <span class="scan-badge">👁 ${d.scans||0} scansioni</span>
+        </div>
+        <div class="qr-item-actions">
+          <button class="btn btn-ghost btn-sm" onclick="openModal('${id}', '${esc(d.title||'')}')">📱 QR</button>
+          <button class="btn btn-ghost btn-sm" onclick="openPublicPage('${id}')">👁 Anteprima</button>
+          <button class="btn btn-ghost btn-sm" onclick="copyLinkDirect('${id}')">🔗 Copia</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteQR('${id}', this)">🗑</button>
+        </div>
+      `;
+      list.appendChild(el);
+    });
+  } catch(e){
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">Errore caricamento.<br><small>'+esc(e.message)+'</small></div></div>';
+  }
+}
+
+function copyLinkDirect(id){
+  const url = getPublicUrl(id);
+  if(navigator.clipboard) navigator.clipboard.writeText(url);
+  toast('🔗 Link copiato!');
+}
+
+async function deleteQR(id, btn){
+  if(!confirm('Eliminare questo QR?')) return;
+  try {
+    await db.collection('pages').doc(id).delete();
+    btn.closest('.qr-item').remove();
+    toast('🗑 Eliminato');
+  } catch(e){ toast('❌ Errore eliminazione'); }
+}
+
+// ===== PUBLIC PAGE =====
+async function renderPublicPage(idOrHash){
+  const id = decodeURIComponent(idOrHash);
+  document.getElementById('page-home').style.display = 'none';
+  document.getElementById('page-public').classList.add('active');
+
+  const content = document.getElementById('publicContent');
+  content.innerHTML = '<div class="loading"><span class="spinner"></span>Caricamento...</div>';
+
+  try {
+    let docSnap = await db.collection('pages').doc(id).get();
+    if(!docSnap.exists){
+      content.innerHTML = '<div class="empty-state"><div class="empty-icon">😕</div><div class="empty-text">Pagina non trovata.</div></div>';
+      return;
+    }
+    const d = docSnap.data();
+
+    // increment scans (rate-limit 5min per device per page)
+    const lsKey = 'scan_'+id;
+    const last = parseInt(localStorage.getItem(lsKey)||'0');
+    if(Date.now()-last > 5*60*1000){
+      db.collection('pages').doc(id).update({ scans: firebase.firestore.FieldValue.increment(1) }).catch(()=>{});
+      localStorage.setItem(lsKey, Date.now());
+    }
+
+    content.innerHTML = '';
+
+    // Header - solo titolo
+    const header = document.createElement('div');
+    header.className = 'pub-header';
+    header.innerHTML = `<div class="pub-title">${esc(d.title||'')}</div>`;
+    content.appendChild(header);
+
+    // Categories & links
+    const linkIcons = ['🌐','📷','💬','📧','🎵','🎬','🛒','📍','📞','💼','🎮','📰'];
+    (d.categories||[]).forEach((cat, ci)=>{
+      const section = document.createElement('div');
+      section.className = 'cat-section';
+      section.innerHTML = `<div class="cat-section-title">${esc(cat.name||'Link')}</div>`;
+      (cat.links||[]).forEach((link, li)=>{
+        const a = document.createElement('a');
+        a.className = 'link-card';
+        a.href = link.url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        const icon = linkIcons[(ci*3+li) % linkIcons.length];
+        a.innerHTML = `
+          <div class="link-icon">${icon}</div>
+          <div>
+            <div class="link-text-main">${esc(link.text)}</div>
+            <div class="link-url-small">${esc(link.url)}</div>
+          </div>
+          <div class="link-arrow">›</div>
+        `;
+        section.appendChild(a);
+      });
+      content.appendChild(section);
+    });
+
+
+
+  } catch(e){
+    content.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">Errore: '+esc(e.message)+'</div></div>';
+  }
+}
+
+function openPublicPage(id){
+  history.pushState(null, '', '#/p/'+id);
+  renderPublicPage(id);
+}
+
+function goHome(){
+  history.pushState(null, '', location.pathname);
+  document.getElementById('page-public').classList.remove('active');
+  document.getElementById('page-home').classList.add('active');
+}
+
+// ===== ROUTING =====
+function checkRoute(){
+  const hash = location.hash;
+  const m = hash.match(/^#\/p\/(.+)$/);
+  if(m){
+    renderPublicPage(m[1]);
+  } else {
+    document.getElementById('page-home').classList.add('active');
+    document.getElementById('page-public').classList.remove('active');
+  }
+}
+
+window.addEventListener('hashchange', checkRoute);
+window.addEventListener('load', checkRoute);
+</script>
+</body>
+</html>
